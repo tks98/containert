@@ -1,10 +1,13 @@
 use std::process::Command;
+use std::io::Error;
 
-pub fn pull_image(image_dir: String, image_name: String) -> String {
-    let output = Command::new("skopeo").arg("copy").arg(image_name).arg(image_dir).output().expect("failed to execute process");
+pub fn pull_image(image_dir: String, image_name: String) -> Result<Vec<u8>, Error> {
+
+    // Run skopeo copy and download the image locally 
+    let output = Command::new("skopeo").arg("copy").arg(image_name).arg(image_dir).output()?; // ? means to bubble up error to caller and return from function
     if !output.status.success() {
-        println!("{}", "Command executed with failing error code");
+        return Ok(output.stderr);
+    } else {
+        return Ok(output.stdout)
     }
-    let output_string = String::from_utf8(output.stdout).ok();
-    return output_string.unwrap();
 }

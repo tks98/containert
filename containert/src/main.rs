@@ -42,8 +42,9 @@ fn main() {
         Some(Commands::Pull {image}) => {
             if !image.is_empty() {
                 println!("Pulling image: {}", image);
-                let output = pull::pull_image("/Users/tks/Projects/containert/containert/target/debug".to_string(), "docker://busybox:latest".to_string());
-                println!("{}", output)
+                let output = pull::pull_image("/Users/tks/Projects/containert/containert/target/debug".to_string(), "docker://busybox:latest".to_string()).expect("error pulling image");
+                let output_string = String::from_utf8(output).ok();
+                println!("{:?}", output_string);
             } else {
                 println!("No image specified");
             }
