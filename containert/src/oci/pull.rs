@@ -1,22 +1,45 @@
 use std::process::Command;
 use std::io::Error;
+use std::io::ErrorKind;
 use std::fs;
 
 
-// Copy the layers of the specified image to the local filesystem
-pub fn pull_image(image: String) -> Result<Vec<u8>, Error> {
 
-    println!("Pulling image: {}", image);
-    let image_name = format!("docker://{}", image);
-    let dir = format!("/var/lib/containert/{}", image);
-    fs::create_dir_all(dir).expect("failed creating image directory");
-    let image_dir = format!("dir:/var/lib/containert/{}", image);
+struct Image {
+    name: String,
+    reference: String
+}
+
+// Copy the layers of the specified image to the local filesystem
+// Essentially performs the example here up til runc
+// https://manpages.ubuntu.com/manpages/jammy/man1/umoci-raw-unpack.1.html
+pub fn pull_image(image_string: String) -> Result<Vec<u8>, Error> {
+
+    println!("Pulling image: {}", image_string);
+    let image = parse_image(image_string.to_owned())?;
+   
+    
+    let image_name = format!("docker://{}", image_string);
+    
+    fs::create_dir_all("/var/lib/containert/")?;
+    let image_dir = format!("oci:/var/lib/containert/{}:{}", image.name, image.reference);
     
     let output = Command::new("skopeo").arg("copy").arg(image_name).arg(image_dir).output()?;
     if !output.status.success() {
+        // unpack the image into a rootfs directory
         return Ok(output.stderr);
     } else {
         return Ok(output.stdout)
     }
 }
 
+
+// Parses an image string into an Image struct
+fn parse_image(image: String) -> Result<Image, Error> {
+    let image_split = image.split_once(":");
+
+    match image_split {
+        Some((name, reference)) => return Ok(Image{name: name.to_string(), reference: reference.to_string()}),
+        None => return Err(Error::new(ErrorKind::Other, "Could not parse image. Provide image in name:tag format")),
+    }
+}
