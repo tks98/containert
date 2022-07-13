@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand}; // bring parser and subcommand traits into scope
-use std::fs;
 
 #[path = "oci/pull.rs"] mod pull;
 
@@ -42,12 +41,7 @@ fn main() {
         },
         Some(Commands::Pull {image}) => {
             if !image.is_empty() {
-                println!("Pulling image: {}", image);
-                let image_registry = format!("docker://{}", image);
-                let dir = format!("/var/lib/containert/{}", image);
-                fs::create_dir_all(dir).expect("failed creating image directory");
-                let full_dir = format!("dir:/var/lib/containert/{}", image);
-                let output = pull::pull_image(full_dir.to_string(), image_registry.to_string()).expect("error pulling image");
+                let output = pull::pull_image(image.to_string()).expect("error pulling image");
                 let output_string = String::from_utf8(output).ok();
                 println!("{:?}", output_string);
             } else {
