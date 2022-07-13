@@ -42,7 +42,7 @@ fn main() {
         Some(Commands::Pull {image}) => {
             if !image.is_empty() {
                 let output = pull::pull_image(image.to_string()).expect("error pulling image");
-                let output_string = String::from_utf8(output).ok();
+                let output_string = String::from_utf8(output).unwrap();
                 println!("{:?}", output_string);
             } else {
                 println!("No image specified");
