@@ -5,10 +5,6 @@ use std::fs;
 
 
 
-struct Image {
-    name: String,
-    reference: String
-}
 
 // Copy the layers of the specified image to the local filesystem
 // Essentially performs the example here up til runc
@@ -26,7 +22,7 @@ pub fn pull_image(image_string: String) -> Result<Vec<u8>, Error> {
     
     let output = Command::new("skopeo").arg("copy").arg(image_name).arg(image_dir).output()?;
     if !output.status.success() {
-        // unpack the image into a rootfs directory
+        // unpack the image into a rootfs
         return Ok(output.stderr);
     } else {
         return Ok(output.stdout)
@@ -34,12 +30,13 @@ pub fn pull_image(image_string: String) -> Result<Vec<u8>, Error> {
 }
 
 
+struct Image {
+    name: String,
+    reference: String
+}
+
 // Parses an image string into an Image struct
 fn parse_image(image: String) -> Result<Image, Error> {
-    let image_split = image.split_once(":");
-
-    match image_split {
-        Some((name, reference)) => return Ok(Image{name: name.to_string(), reference: reference.to_string()}),
-        None => return Err(Error::new(ErrorKind::Other, "Could not parse image. Provide image in name:tag format")),
-    }
+    let (name, reference) = image.split_once(':').ok_or(Error::new(ErrorKind::Other, "Could not parse image. Provide image in name:tag format"))?;
+    return Ok(Image{name: name.to_string(), reference: reference.to_string()});
 }
