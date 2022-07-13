@@ -4,6 +4,10 @@ use std::io::ErrorKind;
 use std::fs;
 
 
+struct Image {
+    name: String,
+    reference: String
+}
 
 
 // Copy the layers of the specified image to the local filesystem
@@ -29,11 +33,6 @@ pub fn pull_image(image_string: String) -> Result<Vec<u8>, Error> {
     }
 }
 
-
-struct Image {
-    name: String,
-    reference: String
-}
 
 // Parses an image string into an Image struct
 fn parse_image(image: String) -> Result<Image, Error> {
