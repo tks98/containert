@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand}; // bring parser and subcommand traits into scope
 
-#[path = "oci/pull.rs"] mod pull;
+#[path = "oci/image.rs"] mod image;
 
 #[derive(Parser)] // implement the Parser trait for the containert struct
 #[clap(author, version, about)] // in help system, output author, version, about
@@ -41,7 +41,7 @@ fn main() {
         },
         Some(Commands::Pull {image}) => {
             if !image.is_empty() {
-                let output = pull::pull_image(image.to_string()).expect("error pulling image");
+                let output = image::pull_image(image.to_string()).expect("error pulling image");
                 let output_string = String::from_utf8(output).unwrap();
                 println!("{:?}", output_string);
             } else {
