@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand}; // bring parser and subcommand traits into scope
 
-#[path = "oci/image.rs"] mod image;
+mod runtime;
+mod filesystem;
 
 #[derive(Parser)] // implement the Parser trait for the containert struct
 #[clap(author, version, about)] // in help system, output author, version, about
@@ -19,6 +20,18 @@ enum Commands {
         /// Specifies the image to run
         #[clap(short, long, action)]
         image: String,
+        
+        /// Specifies the command to run
+        #[clap(short, long, action)]
+        command: String,
+        
+        /// Specifies the arguments to the command to run
+        #[clap(short, long, action)]
+        args: Vec<String>,
+
+        /// Specifies the path to the directory to mount as the rootfs of the container
+        #[clap(short, long, action)]
+        rootfs: String
     },
 
     Pull {
@@ -32,16 +45,19 @@ fn main() {
     let cli = Containert::parse();
 
     match &cli.command {
-        Some(Commands::Run { image}) => {
+        Some(Commands::Run { image, command, args, rootfs}) => {
             if !image.is_empty() {
                 println!("Running image: {}", image);
+                let runtime = runtime::Runtime{cmd: command.to_string(), args: args.to_vec(), rootfs: rootfs.to_string()};
+                let result = runtime.run().unwrap();
+                println!("{}", result);
             } else {
                 println!("No image specified");
             }
         },
         Some(Commands::Pull {image}) => {
             if !image.is_empty() {
-                let output = image::pull_image(image.to_string()).expect("error pulling image");
+                let output = filesystem::pull_image(&image.to_string()).expect("error pulling image");
                 let output_string = String::from_utf8(output).unwrap();
                 println!("{:?}", output_string);
             } else {
