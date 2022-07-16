@@ -43,9 +43,6 @@ impl Runtime {
     }
 }
 
-fn spawn_container(command: &str, arguments: Vec<&str>)  {
-
-}
 
 fn apply_namespaces(command: &mut unshare::Command) {
     let mut namespaces = Vec::<Namespace>::new();
