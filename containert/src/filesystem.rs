@@ -24,10 +24,8 @@ pub fn pull_image(image_string: String, path: String) -> Result<Vec<u8>, Error> 
     let image = parse_image(image_string, path)?;
     let destination = format!("oci:{}:{}", image.dir.as_path().display().to_string(), image.reference);
   
-    let output = Command::new("skopeo").arg("copy").arg(&image.uri).arg(&destination).output()?;
+    let output = Command::new("skopeo").arg("copy").arg(&image.uri).arg(&destination).arg("--insecure-policy").output()?;
     if !output.status.success() {
-        println!("{}", image.uri);
-        println!("{}", destination);
         return Ok(output.stderr);
     }
 
