@@ -38,6 +38,10 @@ enum Commands {
         /// Pulls an image
         #[clap(short, long, action)]
         image: String,
+
+        /// Specifies the directory to extract rootfs
+        #[clap(short, long, action)]
+        path: String,
     }
 }
 
@@ -55,9 +59,9 @@ fn main() {
                 println!("No image specified");
             }
         },
-        Some(Commands::Pull {image}) => {
+        Some(Commands::Pull {image, path}) => {
             if !image.is_empty() {
-                let output = filesystem::pull_image(&image.to_string()).expect("error pulling image");
+                let output = filesystem::pull_image(image.to_string(), path.to_string()).expect("error pulling image");
                 let output_string = String::from_utf8(output).unwrap();
                 println!("{:?}", output_string);
             } else {
