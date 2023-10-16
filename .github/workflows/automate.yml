@@ -1,0 +1,68 @@
+name: Rust Build and Release for Containert
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Rust environment
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Read version
+        id: vars
+        run: echo "RELEASE_VERSION=$(cat VERSION)" >> $GITHUB_ENV
+
+      - name: Build for Linux AMD64
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+      
+      - name: Package and Hash (AMD64)
+        run: |
+          tar -czvf "containert_${{ env.RELEASE_VERSION }}_amd64.tar.gz" ./target/x86_64-unknown-linux-gnu/release/containert
+          sha256sum "containert_${{ env.RELEASE_VERSION }}_amd64.tar.gz" > "containert_${{ env.RELEASE_VERSION }}_amd64.tar.gz.sha256"
+      
+      - name: Create Release
+        id: create_release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          release_name: Release ${{ env.RELEASE_VERSION }}
+          body: New release version ${{ env.RELEASE_VERSION }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload Release Assets (AMD64)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./containert_${{ env.RELEASE_VERSION }}_amd64.tar.gz
+          asset_name: containert_${{ env.RELEASE_VERSION }}_amd64.tar.gz
+          asset_content_type: application/gzip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload Release SHA (AMD64)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./containert_${{ env.RELEASE_VERSION }}_amd64.tar.gz.sha256
+          asset_name: containert_${{ env.RELEASE_VERSION }}_amd64.tar.gz.sha256
+          asset_content_type: text/plain
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
