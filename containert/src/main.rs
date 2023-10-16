@@ -1,70 +1,99 @@
-use clap::{Parser, Subcommand}; // bring parser and subcommand traits into scope
+// Import necessary modules and libraries
+use clap::{arg, Command};
+use nix::sched::{unshare, CloneFlags};
+use nix::sys::wait::wait;
+use nix::unistd::{chdir, chroot, execvp, fork, ForkResult};
+use std::ffi::CString;
+use std::path::PathBuf;
+use std::process::exit;
+use cgroups_rs::{CgroupPid, hierarchies};
+use cgroups_rs::cgroup_builder::CgroupBuilder;
+use cgroups_rs::Controller;
 
-mod runtime;
-mod filesystem;
+// The main asynchronous function
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Setup and parse command-line arguments
+    let matches = Command::new("containert")
+        .arg(arg!(--binary_path <VALUE>).required(true))
+        .arg(arg!(--rootfs <VALUE>).required(true))
+        .get_matches();
 
-#[derive(Parser)] // implement the Parser trait for the containert struct
-#[clap(author, version, about)] // in help system, output author, version, about
-struct Containert {
-    #[clap(value_parser)] 
-    name: Option<String>,
+    // Retrieve and store the path to the binary and root filesystem
+    let binary_path = matches.get_one::<String>("binary_path").unwrap();
+    let rootfs_path_arg = matches.get_one::<String>("rootfs").unwrap();
 
-    #[clap(subcommand)] // specifies to clap that this is the subcommand to containert
-    command: Option<Commands>
-}
+    let mut rootfs_path = PathBuf::new();
+    rootfs_path.push(rootfs_path_arg);
 
-#[derive(Subcommand)] // implements the subcommand trait, specifies which subcommands are valid for containert
-enum Commands {
-    /// Runs the specified image with the containert runtime
-    Run {
-        /// Specifies the image to run
-        #[clap(short, long, action)]
-        image: String,
-        
-        /// Specifies the command to run
-        #[clap(short, long, action)]
-        command: String,
-        
-        /// Specifies the arguments to the command to run
-        #[clap(short, long, action)]
-        args: Vec<String>,
-
-        /// Specifies the path to the directory to mount as the rootfs of the container
-        #[clap(short, long, action)]
-        rootfs: String
-    },
-
-    Pull {
-        /// Pulls an image
-        #[clap(short, long, action)]
-        image: String,
-    }
-}
-
-fn main() {
-    let cli = Containert::parse();
-
-    match &cli.command {
-        Some(Commands::Run { image, command, args, rootfs}) => {
-            if !image.is_empty() {
-                println!("Running image: {}", image);
-                let runtime = runtime::Runtime{cmd: command.to_string(), args: args.to_vec(), rootfs: rootfs.to_string()};
-                let result = runtime.run().unwrap();
-                println!("{}", result);
-            } else {
-                println!("No image specified");
-            }
-        },
-        Some(Commands::Pull {image}) => {
-            if !image.is_empty() {
-                let output = filesystem::pull_image(&image.to_string()).expect("error pulling image");
-                let output_string = String::from_utf8(output).unwrap();
-                println!("{:?}", output_string);
-            } else {
-                println!("No image specified");
-            }
-        },
-        &None => todo!()
+    // Validate that the root filesystem path is actually a directory
+    if !rootfs_path.is_dir() {
+        eprintln!("Invalid rootfs directory");
+        exit(1);
     }
 
+    // Set up the flags for namespaces
+    let flags = CloneFlags::CLONE_NEWNS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWUTS | CloneFlags::CLONE_NEWIPC | CloneFlags::CLONE_NEWNET;
+    unshare(flags).unwrap();
+
+    // Forking the process
+    unsafe {
+        match fork() {
+            Ok(ForkResult::Parent { .. }) => {
+                wait().unwrap();
+                exit(0);
+            },
+            Ok(ForkResult::Child) => {
+                // Child process code
+                chroot(&rootfs_path).unwrap();
+                chdir("/").unwrap();
+
+                // Create and configure cgroups
+                let hier = hierarchies::auto();
+                let cg_result = CgroupBuilder::new("example")
+                    .memory()
+                    .kernel_memory_limit(4 * 1024 * 1024 * 1024)
+                    .memory_hard_limit(4 * 1024 * 1024 * 1024)
+                    .done()
+                    .cpu()
+                    .shares(100)
+                    .done()
+                    .build(hier);
+
+                let cg = match cg_result {
+                    Ok(cgroup) => cgroup,
+                    Err(_) => {
+                        eprintln!("Failed to create cgroup");
+                        exit(1);
+                    }
+                };
+
+                // Add the current process to the cgroup
+                let cpus: &cgroups_rs::cpu::CpuController = cg.controller_of().unwrap();
+                let memory: &cgroups_rs::memory::MemController = cg.controller_of().unwrap();
+                let pid = CgroupPid::from(std::process::id() as u64);
+
+                // Handle potential errors when adding tasks to cgroups
+                if let Err(_) = cpus.add_task(&pid) {
+                    eprintln!("Failed to add task to CPU cgroup");
+                }
+                if let Err(_) = memory.add_task(&pid) {
+                    eprintln!("Failed to add task to Memory cgroup");
+                }
+
+                // Execute the command in the new environment
+                let cmd = CString::new(binary_path.as_bytes()).unwrap();
+                let args = [cmd.clone()];
+                execvp(&cmd, &args).unwrap_or_else(|_| {
+                    eprintln!("Failed to execute command");
+                    exit(1);
+                });
+            },
+            Err(_) => {
+                eprintln!("Fork failed");
+                exit(1);
+            }
+        }
+    }
+    Ok(())
 }
